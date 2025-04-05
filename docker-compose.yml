@@ -1,0 +1,21 @@
+# docker-compose up -d --build parkvision-video-stream
+networks:
+  parkvision_net:
+    name: parkvision_net
+    external: true
+
+services:
+  parkvision-video-stream:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: parkvision-video-stream
+    networks:
+      - parkvision_net
+    ports:
+      - "5001:5001"
+    environment:
+      - DOCKER=1
+    volumes:
+      - .:/app
+    restart: unless-stopped

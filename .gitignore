@@ -1,0 +1,25 @@
+# Ignore Python cache files
+*.pyc
+__pycache__/
+
+# Ignore files and subdirectories inside the neural_networks folder
+/neural_networks/*
+
+# Ignore Flask cache and session files
+instance/
+webapp/__pycache__/
+webapp/static/.webassets-cache/
+webapp/static/css/.sass-cache/
+webapp/templates/**/*cache*
+
+# Ignore environment files
+.venv/
+.env
+venv/
+
+# Ignore database files
+*.db
+*.sqlite3
+
+# Ignore log files
+*.log

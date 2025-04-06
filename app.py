@@ -50,6 +50,6 @@ def video_feed():
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5001))
     host = '0.0.0.0' if os.environ.get('DOCKER') else '127.0.0.1'
     app.run(debug=True, host=host, port=port)

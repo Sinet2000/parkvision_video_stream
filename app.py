@@ -28,25 +28,6 @@ parking_camera_sources = [
     { 'id': 'PLV-0003', 'title': 'Parking Lot', 'identifier': 'PLV-0003', 'address': '789 Pine Rd' }
 ]
 
-# Custom Jinja filter for URL encoding
-@app.template_filter('url_encode')
-def url_encode_filter(s):
-    return urllib.parse.quote_plus(s)
-
-@app.route('/')
-def index():
-    """Serve the index page"""
-    return render_template('index.html', parking_camera_sources=parking_camera_sources)
-
-def generate_video(camera_id):
-    # source = CAMERA_SOURCES.get(camera_id)
-    # if source is None:
-    #     # If invalid ID, return a single blank frame or an error image
-    #     return
-    
-    cap = cv2.VideoCapture(video_path)
-    frame_rate = cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = 1 / (frame_rate / frame_rate)
 def background_video_reader():
     """Read video in the background and push frames to a queue."""
     cap = cv2.VideoCapture(VIDEO_PATH)
@@ -76,22 +57,13 @@ def background_video_reader():
         time.sleep(frame_delay)
 
     cap.release()
-
-@app.route('/video_feed/<camera_id>')
-def video_feed(camera_id):
-    """Video streaming route for the detection app"""
-    return Response(
-        generate_video(camera_id),
-        mimetype='multipart/x-mixed-replace; boundary=frame'
-    )
-
-if __name__ == '__main__':
-@app.route('/')
-def index():
-    """Serve the index page."""
-    return render_template('index.html')
-
-def generate_video():
+    
+def generate_video(camera_id):
+    # source = CAMERA_SOURCES.get(camera_id)
+    # if source is None:
+    #     # If invalid ID, return a single blank frame or an error image
+    #     return
+    
     """Stream frames from the queue to clients."""
     while True:
         try:
@@ -102,11 +74,23 @@ def generate_video():
         except queue.Empty:
             continue  # Keep trying if queue is empty momentarily
 
-@app.route('/video_feed')
-def video_feed():
-    """Video streaming route."""
-    return Response(generate_video(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+# Custom Jinja filter for URL encoding
+@app.template_filter('url_encode')
+def url_encode_filter(s):
+    return urllib.parse.quote_plus(s)
+
+@app.route('/')
+def index():
+    """Serve the index page"""
+    return render_template('index.html', parking_camera_sources=parking_camera_sources)
+
+@app.route('/video_feed/<camera_id>')
+def video_feed(camera_id):
+    """Video streaming route for the detection app"""
+    return Response(
+        generate_video(camera_id),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
 
 if __name__ == '__main__':
     # Ensure video file exists

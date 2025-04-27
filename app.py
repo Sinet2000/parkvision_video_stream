@@ -9,70 +9,49 @@ import queue
 app = Flask(__name__)
 
 # Configuration
-VIDEO_FOLDER_PATH = "static/videos/"
-VIDEO_FILE_NAME = "parking_video.mp4"
-VIDEO_PATH = os.path.join(VIDEO_FOLDER_PATH, VIDEO_FILE_NAME)
-SLOWDOWN_FACTOR = 30  # Playback 30x slower than real-time
-FRAME_QUEUE = queue.Queue(maxsize=10)  # Buffer for frames
-RUNNING = True  # Control background thread
-
-CAMERA_SOURCES = {
-    'PLV-0001': 0,
-    'PLV-0002': 1,
-    'PLV-0003': 2
-}
+default_folder = os.path.join(os.path.dirname(__file__), 'static', 'videos')
+VIDEO_FOLDER_PATH = default_folder
 
 parking_camera_sources = [
-    { 'id': 'PLV-0001', 'title': 'Front Gate', 'identifier': 'PLV-0001', 'address': '123 Main St' },
-    { 'id': 'PLV-0002', 'title': 'Back Entrance', 'identifier': 'PLV-0002', 'address': '456 Oak Ave' },
-    { 'id': 'PLV-0003', 'title': 'Parking Lot', 'identifier': 'PLV-0003', 'address': '789 Pine Rd' }
+    { 'id': 'PLV-0001', 'title': 'Front Gate', 'identifier': 'PLV-0001', 'address': 'Krišjāņa Barona iela 1, Rīga, LV-1050', 'latitude': 56.9547093, 'longitude': 24.1560588 },
+    { 'id': 'PLV-0002', 'title': 'Back Entrance', 'identifier': 'PLV-0002', 'address': 'Elizabetes iela 2, Rīga, LV-1010', 'latitude': 56.9474850, 'longitude': 24.1115221 },
+    { 'id': 'PLV-0003', 'title': 'Parking Lot', 'identifier': 'PLV-0003', 'address': 'Miķeļa iela, Rīga, LV-1010', 'latitude': 56.95571405810339, 'longitude': 24.099527971722647 },
+    { 'id': 'PLV-0004', 'title': 'Parking Lot', 'identifier': 'PLV-0003', 'address': 'Republikas Laukums 2A, Rīga, LV-1010', 'latitude': 56.9535827, 'longitude': 24.100376016713284 }
 ]
 
-def background_video_reader():
-    """Read video in the background and push frames to a queue."""
-    cap = cv2.VideoCapture(VIDEO_PATH)
-    if not cap.isOpened():
-        print(f"Error: Could not open video {VIDEO_PATH}")
+def generate_video(camera_id):
+    """
+    Stream video file for given camera_id with slowdown.
+    File name derived as parkingXXXX_video.mp4 from ID.
+    """
+    # Extract numeric part: PLV-0001 -> 0001
+    suffix = camera_id.split('-')[-1]
+    filename = f"parking{suffix}_video.mp4"
+    path = os.path.join(VIDEO_FOLDER_PATH, filename)
+
+    if not os.path.exists(path):
+        # If file missing, stop generator
         return
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = (1 / fps) * SLOWDOWN_FACTOR  # Delay for slower playback
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    slowdown = 8
+    delay = (1.0 / fps) * slowdown
 
-    while RUNNING:
+    while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop video
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
-
-        # Encode frame as JPEG
-        ret, jpeg = cv2.imencode('.jpg', frame)
-        if ret:
-            frame_data = jpeg.tobytes()
-            # Put frame in queue (drop old frames if queue is full)
-            try:
-                FRAME_QUEUE.put_nowait(frame_data)
-            except queue.Full:
-                pass
-
-        time.sleep(frame_delay)
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret:
+            continue
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(delay)
 
     cap.release()
-    
-def generate_video(camera_id):
-    # source = CAMERA_SOURCES.get(camera_id)
-    # if source is None:
-    #     # If invalid ID, return a single blank frame or an error image
-    #     return
-    
-    """Stream frames from the queue to clients."""
-    while True:
-        try:
-            # Get the latest frame from the queue
-            frame_data = FRAME_QUEUE.get(timeout=1)
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n\r\n')
-        except queue.Empty:
-            continue  # Keep trying if queue is empty momentarily
 
 # Custom Jinja filter for URL encoding
 @app.template_filter('url_encode')
@@ -86,22 +65,17 @@ def index():
 
 @app.route('/video_feed/<camera_id>')
 def video_feed(camera_id):
-    """Video streaming route for the detection app"""
     return Response(
         generate_video(camera_id),
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
 
 if __name__ == '__main__':
-    # Ensure video file exists
-    if not os.path.exists(VIDEO_PATH):
-        print(f"Error: Video file {VIDEO_PATH} not found")
+    # Ensure video folder exists
+    if not os.path.isdir(VIDEO_FOLDER_PATH):
+        print(f"Error: Video folder {VIDEO_FOLDER_PATH} not found.")
         exit(1)
 
-    # Start background thread
-    threading.Thread(target=background_video_reader, daemon=True).start()
-
-    # Run Flask app
-    port = int(os.environ.get("PORT", 5001))
-    host = '0.0.0.0' if os.environ.get('DOCKER') else '127.0.0.1'
-    app.run(debug=True, host=host, port=port, use_reloader=False)
+    port = int(os.environ.get('PORT', 5000))
+    host = '0.0.0.0'
+    app.run(host=host, port=port, threaded=True, debug=False)
